@@ -21,7 +21,8 @@ async function computeEdge(fileData, i, j) {
     const maxSize = Math.max(fileA.compSize, fileB.compSize);
     const ncd = (compConcatSize - minSize) / maxSize;
     const similarity = 1 - ncd;
-    return { source: fileA.name, target: fileB.name, similarity };
+    // Use each file's 'path' as the unique identifier.
+    return { source: fileA.path, target: fileB.path, similarity };
 }
 
 // Listen for messages from the main thread.
@@ -29,15 +30,15 @@ onmessage = async function(e) {
     const fileData = e.data.fileData;
     const n = fileData.length;
 
-    // Compute totalPairs only for files sharing the same extension.
-    const extGroups = {};
+    // Compute totalPairs only for files sharing the same comparison_key.
+    const groupCounts = {};
     fileData.forEach(file => {
-        const ext = file.extension;
-        extGroups[ext] = (extGroups[ext] || 0) + 1;
+        const key = file.comparison_key;
+        groupCounts[key] = (groupCounts[key] || 0) + 1;
     });
     let totalPairs = 0;
-    for (let ext in extGroups) {
-        const count = extGroups[ext];
+    for (let key in groupCounts) {
+        const count = groupCounts[key];
         totalPairs += (count * (count - 1)) / 2;
     }
 
@@ -46,8 +47,8 @@ onmessage = async function(e) {
 
     for (let i = 0; i < n; i++) {
         for (let j = i + 1; j < n; j++) {
-            // Only compare files with the same extension.
-            if (fileData[i].extension !== fileData[j].extension) {
+            // Only compare files with the same comparison_key.
+            if (fileData[i].comparison_key !== fileData[j].comparison_key) {
                 continue;
             }
             try {

@@ -1,3 +1,8 @@
+// Register cytoscape-popper with popper@2 if available
+if (typeof Popper !== 'undefined' && typeof cytoscapePopper !== 'undefined') {
+    cytoscape.use(cytoscapePopper(Popper.createPopper));
+}
+
 // Debounce utility: calls func after delay ms of inactivity.
 // Also provides a cancel() method to cancel any pending call.
 function debounce(func, delay) {
@@ -16,6 +21,48 @@ function debounce(func, delay) {
         }
     };
     return debounced;
+}
+
+// Convert a ZIP file into an array of file objects.
+// Each object contains: fileName, path, content, compSize, comparison_key, tooltip.
+// By default, comparison_key is set to the file extension.
+async function convertZipToFileObjects(zipFile) {
+    const zip = new JSZip();
+    const zipContent = await zip.loadAsync(zipFile);
+    const entries = [];
+    zip.forEach((relativePath, zipEntry) => {
+        // Consider only files that have a dot in their name.
+        if (!zipEntry.dir && relativePath.indexOf('.') !== -1) {
+            entries.push(zipEntry);
+        }
+    });
+    if (entries.length === 0) {
+        return [];
+    }
+    const results = [];
+    for (let entry of entries) {
+        const content = await entry.async("string");
+        const compSize = await compressText(content);
+        // Extract base file name (ignoring any folder paths)
+        const parts = entry.name.split('/');
+        const fileName = parts[parts.length - 1];
+        // Set comparison_key to file extension (if any) in lowercase.
+        let comparison_key = "";
+        if (fileName.indexOf('.') !== -1) {
+            comparison_key = fileName.split('.').pop().toLowerCase();
+        }
+        // For now, set tooltip equal to the file name.
+        const tooltip = fileName;
+        results.push({
+            fileName: fileName,
+            path: entry.name,
+            content: content,
+            compSize: compSize,
+            comparison_key: comparison_key,
+            tooltip: tooltip
+        });
+    }
+    return results;
 }
 
 // Global variables
@@ -49,7 +96,6 @@ thresholdSlider.addEventListener('input', (e) => {
     document.getElementById('threshold-value').innerText = threshold.toFixed(2);
     debouncedUpdateGraphEdges();
 });
-
 // Immediately update when slider change is committed (e.g. mouse up)
 thresholdSlider.addEventListener('change', (e) => {
     debouncedUpdateGraphEdges.cancel();
@@ -115,16 +161,6 @@ dropZone.addEventListener('drop', async (e) => {
     }
 });
 
-// Utility: Read file as text
-function readFileAsText(file) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = (e) => resolve(e.target.result);
-        reader.onerror = (e) => reject(e);
-        reader.readAsText(file);
-    });
-}
-
 // Utility: Compress a string using LZMA (from the included library) and return compressed size.
 function compressText(text) {
     return new Promise((resolve, reject) => {
@@ -144,46 +180,28 @@ async function handleZipFile(zipFile) {
     // Reset progress display.
     progressDiv.innerText = "Progress: 0%";
 
-    const zip = new JSZip();
     try {
-        const zipContent = await zip.loadAsync(zipFile);
-        // Filter for files (we no longer restrict to just .txt).
-        const files = [];
-        zip.forEach((relativePath, zipEntry) => {
-            if (!zipEntry.dir && relativePath.indexOf('.') !== -1) {
-                files.push(zipEntry);
-            }
-        });
-
-        if (files.length === 0) {
+        // Use the new conversion function.
+        const fileData = await convertZipToFileObjects(zipFile);
+        if (fileData.length === 0) {
             alert("No files with an extension found in the ZIP archive.");
             return;
         }
 
-        // Read each file's content, compute its compressed size, and record its extension.
-        const fileData = []; // { name, content, compSize, extension }
-        for (let entry of files) {
-            const content = await entry.async("string");
-            const compSize = await compressText(content);
-            const ext = entry.name.split('.').pop().toLowerCase();
-            fileData.push({
-                name: entry.name,
-                content,
-                compSize,
-                extension: ext
-            });
-        }
-
         // Immediately render an empty graph with all nodes.
         const nodes = fileData.map(file => ({
-            data: { id: file.name, label: file.name }
+            data: {
+                id: file.path,
+                label: file.fileName,
+                tooltip: file.tooltip  // stored tooltip property
+            }
         }));
         // Initialize lastGraphData with nodes and an empty allEdges array.
         lastGraphData = { nodes, allEdges: [] };
         renderGraph(lastGraphData, true);
 
         // Start the background worker for pairwise NCD computation.
-        const worker = new Worker('worker.js');
+        const worker = new Worker('ncdWorker.js');
         // Post fileData to the worker.
         worker.postMessage({ fileData: fileData });
 
@@ -281,6 +299,56 @@ function renderGraph(graphData, fullRedraw = false) {
                 animationDuration: 500
             }
         });
+
+        // Helper to create a tooltip div.
+        function makeDiv(text) {
+            var div = document.createElement('div');
+            div.classList.add('popper-div');
+            div.innerHTML = text;
+            document.body.appendChild(div);
+            return div;
+        }
+
+        // Attach event listeners to show tooltips only on mouseover.
+        currentGraph.nodes().forEach(function(node) {
+            if (node.data('tooltip')) {
+                node.on('mouseover', function(e) {
+                    // Create the popper instance on mouseover.
+                    var popperInstance = node.popper({
+                        content: function(){
+                            return makeDiv(node.data('tooltip'));
+                        },
+                        popper: {
+                            placement: 'top'
+                        }
+                    });
+                    node.scratch('popper', popperInstance);
+                    // Create an update function to reposition the tooltip.
+                    var updateFn = function(){ popperInstance.update(); };
+                    node.scratch('popperUpdate', updateFn);
+                    node.on('position', updateFn);
+                    currentGraph.on('pan zoom resize', updateFn);
+                });
+                node.on('mouseout', function(e) {
+                    // Remove the popper instance on mouseout.
+                    var popperInstance = node.scratch('popper');
+                    var updateFn = node.scratch('popperUpdate');
+                    if (popperInstance) {
+                        var popperDiv = popperInstance.state.elements.popper;
+                        if (popperDiv && popperDiv.parentNode) {
+                            popperDiv.parentNode.removeChild(popperDiv);
+                        }
+                        node.removeScratch('popper');
+                    }
+                    if (updateFn) {
+                        node.off('position', updateFn);
+                        currentGraph.off('pan zoom resize', updateFn);
+                        node.removeScratch('popperUpdate');
+                    }
+                });
+            }
+        });
+
     } else {
         // (This branch is not used for threshold changes since updateGraphEdges() handles it.)
         filteredEdges.forEach(edge => {
