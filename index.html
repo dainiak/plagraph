@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Plagiarism Detection App</title>
+    <link rel="stylesheet" href="style.css">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lzma@2.3.2/src/lzma_worker.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/cytoscape@3.31.0/dist/cytoscape.min.js"></script>
+</head>
+<body>
+<div id="header">
+    <h1>In-Browser Plagiarism Detection</h1>
+</div>
+
+<!-- Drag-n-Drop Zone and Controls -->
+<div id="controls">
+    <div id="drop-zone">Drag &amp; Drop Your ZIP File Here</div>
+    <div>
+        <label for="threshold">Edge Threshold:</label>
+        <input type="range" id="threshold" min="0" max="1" step="0.01" value="0.5">
+        <span id="threshold-value">0.50</span>
+    </div>
+    <div>
+        <button id="save-graph">Save Graph</button>
+        <button id="load-graph">Load Graph</button>
+    </div>
+</div>
+
+<!-- Graph Visualization Container -->
+<div id="graph-container"></div>
+
+<script src="main.js"></script>
+
+</body>
+</html>

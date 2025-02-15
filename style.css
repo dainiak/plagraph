@@ -1,0 +1,37 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 0;
+}
+#header {
+    background: #333;
+    color: #fff;
+    padding: 1em;
+    text-align: center;
+}
+#controls {
+    padding: 1em;
+    background: #f0f0f0;
+    display: flex;
+    align-items: center;
+    gap: 1em;
+}
+#drop-zone {
+    border: 3px dashed #ccc;
+    border-radius: 5px;
+    padding: 2em;
+    text-align: center;
+    margin: 1em;
+    transition: background-color 0.3s;
+}
+#drop-zone.hover {
+    background-color: #e0e0e0;
+}
+#graph-container {
+    height: 600px;
+    margin: 1em;
+    border: 1px solid #ccc;
+}
+button {
+    padding: 0.5em 1em;
+}
