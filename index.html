@@ -3,37 +3,47 @@
 <head>
     <meta charset="UTF-8">
     <title>Plagiarism Detection App</title>
-    <link rel="stylesheet" href="style.css">
 
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/lzma@2.3.2/src/lzma_worker.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/cytoscape@3.31.0/dist/cytoscape.min.js"></script>
     <script src="https://unpkg.com/@popperjs/core@2"></script>
     <script src="https://cdn.jsdelivr.net/npm/cytoscape-popper@4.0.1/cytoscape-popper.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/webcola@3.4.0/WebCola/cola.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/cytoscape-cola@2.5.1/cytoscape-cola.min.js"></script>
 </head>
 <body>
-<div id="header">
-    <h1>In-Browser Plagiarism Detection</h1>
-</div>
+<div class="container my-4">
+    <header id="header" class="bg-primary text-white p-4 mb-4 text-center rounded">
+        <h1>In-Browser Plagiarism Detection</h1>
+    </header>
 
-<!-- Drag-n-Drop Zone and Controls -->
-<div id="controls">
-    <div id="drop-zone">Drag &amp; Drop Your ZIP File Here</div>
-    <div>
-        <label for="threshold">Edge Threshold:</label>
-        <input type="range" id="threshold" min="0" max="1" step="0.01" value="0.5">
-        <span id="threshold-value">0.50</span>
-    </div>
-    <div>
-        <button id="save-graph">Save Graph</button>
-        <button id="load-graph">Load Graph</button>
-    </div>
-</div>
+    <!-- Drag-n-Drop Zone and Controls -->
+    <section id="controls" class="mb-4">
+        <div id="drop-zone" class="border border-secondary rounded p-4 text-center mb-3">
+            Drag &amp; Drop Your ZIP File Here
+        </div>
+        <!-- Progress Element (if not created dynamically) -->
+        <div id="progress" class="alert alert-info mt-3">Progress: 0%</div>
 
-<!-- Graph Visualization Container -->
-<div id="graph-container"></div>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <div>
+                <label for="threshold" class="form-label me-2">Edge Threshold:</label>
+                <input type="range" id="threshold" min="0" max="1" step="0.01" value="0.5">
+                <span id="threshold-value" class="ms-2">0.50</span>
+            </div>
+            <div>
+                <button id="save-graph" class="btn btn-primary me-2">Save Graph</button>
+                <button id="load-graph" class="btn btn-secondary">Load Graph</button>
+            </div>
+        </div>
+    </section>
+
+    <section id="graph-container" class="border rounded" style="height: 600px;"></section>
+</div>
 
 <script src="main.js"></script>
-
 </body>
 </html>

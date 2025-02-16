@@ -2,6 +2,9 @@
 if (typeof Popper !== 'undefined' && typeof cytoscapePopper !== 'undefined') {
     cytoscape.use(cytoscapePopper(Popper.createPopper));
 }
+if (typeof cytoscape === 'undefined') {
+    cytoscape.use(cytoscapeCola);
+}
 
 // Debounce utility: calls func after delay ms of inactivity.
 // Also provides a cancel() method to cancel any pending call.
@@ -75,8 +78,7 @@ let progressDiv = document.getElementById('progress');
 if (!progressDiv) {
     progressDiv = document.createElement('div');
     progressDiv.id = 'progress';
-    progressDiv.style.margin = '1em';
-    progressDiv.style.fontWeight = 'bold';
+    progressDiv.className = "alert alert-info mt-3";
     // Insert before the graph container
     document.body.insertBefore(progressDiv, document.getElementById('graph-container'));
 }
@@ -284,8 +286,6 @@ function renderGraph(graphData, fullRedraw = false) {
                         'width': 2,
                         'line-color': '#aaa',
                         'curve-style': 'bezier',
-                        'target-arrow-shape': 'triangle',
-                        'target-arrow-color': '#aaa',
                         'label': 'data(weight)',
                         'font-size': '8px',
                         'text-rotation': 'autorotate'
@@ -293,17 +293,18 @@ function renderGraph(graphData, fullRedraw = false) {
                 }
             ],
             layout: {
-                name: 'cose',
+                // name: 'cose',
+                name: 'cola',
                 padding: 30,
-                animate: true,
-                animationDuration: 500
+                // animate: true,
+                // animationDuration: 500
             }
         });
 
-        // Helper to create a tooltip div.
+        // Helper to create a tooltip div with Bootstrap styling.
         function makeDiv(text) {
             var div = document.createElement('div');
-            div.classList.add('popper-div');
+            div.classList.add('popover', 'bs-popover-top', 'p-2');
             div.innerHTML = text;
             document.body.appendChild(div);
             return div;
