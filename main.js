@@ -4,6 +4,7 @@ if (document.body) {
 }
 
 const wrapControl = document.getElementById("diffWrap");
+const diffOutputFormatEl = document.getElementById("diffOutputFormat");
 const graphContainer = document.getElementById("graph-container");
 const thresholdSlider = document.getElementById("threshold");
 const thresholdValueDisplay = document.getElementById("threshold-value");
@@ -410,16 +411,14 @@ function showDiffModal(nodeA, nodeB) {
     function updateEditableDiff() {
         const newContentA = editorA.getValue();
         const newContentB = editorB.getValue();
-        const diffOutputFormatEl = document.getElementById("diffOutputFormat");
         const outputFormat = diffOutputFormatEl.value;
         const diffString = Diff.createTwoFilesPatch(fileNameA, fileNameB, newContentA, newContentB);
-        const diffHtml = Diff2Html.html(diffString, {
+        document.getElementById("diffOutput").innerHTML = Diff2Html.html(diffString, {
             drawFileList: false,
             matching: "lines",
             outputFormat: outputFormat,
             colorScheme: isInDarkMode ? "dark" : "light",
         });
-        document.getElementById("diffOutput").innerHTML = diffHtml;
     }
 
     const debouncedUpdate = debounce(updateEditableDiff, 100);
