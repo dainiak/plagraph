@@ -61,14 +61,25 @@
 
 <!-- Modal for showing file diff -->
 <div class="modal fade" id="diffModal" tabindex="-1" aria-labelledby="diffModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl">
+    <div class="modal-dialog modal-lg">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="diffModalLabel">File Diff</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body" id="diffModalBody">
-                <!-- Diff output will be injected here -->
+            <div class="modal-body">
+                <!-- Diff settings controls -->
+                <div id="diffSettings" class="mb-3">
+                    <label for="diffOutputFormat" class="ms-3 me-2">Output Format:</label>
+                    <select id="diffOutputFormat" class="form-select form-select-sm d-inline-block" style="width:auto;">
+                        <option value="side-by-side">Side-by-Side</option>
+                        <option value="line-by-line">Line-by-Line</option>
+                    </select>
+                </div>
+                <!-- Container where the diff output is rendered -->
+                <div id="diffOutput">
+                    <!-- Diff output will be injected here -->
+                </div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
@@ -76,6 +87,7 @@
         </div>
     </div>
 </div>
+
 
 <script src="main.js"></script>
 </body>
