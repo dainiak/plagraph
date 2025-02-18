@@ -1,3 +1,6 @@
+const isInDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+document.body && document.body.setAttribute("data-bs-theme", isInDarkMode ? "dark" : "light");
+
 // Register cytoscape-popper with popper@2 if available
 if (typeof Popper !== 'undefined' && typeof cytoscapePopper !== 'undefined') {
     cytoscape.use(cytoscapePopper(Popper.createPopper));
@@ -8,8 +11,6 @@ if (typeof cytoscape === 'undefined') {
 
 // Global flag to indicate if the diff modal is open.
 let modalIsOpen = false;
-// Global variable to store the current diff string.
-let currentDiffString = "";
 
 // Debounce utility: calls func after delay ms of inactivity.
 // Also provides a cancel() method to cancel any pending call.
@@ -109,7 +110,9 @@ function updateGraphEdges() {
         }));
     const newEdgeIds = newEdges.map(edge => edge.id);
     currentGraph.edges().forEach(edge => {
-        if (!newEdgeIds.includes(edge.id())) edge.remove();
+        if (!newEdgeIds.includes(edge.id())) {
+            edge.remove();
+        }
     });
     newEdges.forEach(edgeData => {
         if (!currentGraph.getElementById(edgeData.id).length) {
@@ -117,9 +120,7 @@ function updateGraphEdges() {
         }
     });
     const layout = currentGraph.layout({
-        name: 'cose',
-        animate: true,
-        animationDuration: 500,
+        name: "cola",
         fit: true,
         padding: 30
     });
@@ -228,7 +229,7 @@ function renderGraph(graphData, fullRedraw = false) {
                         'label': 'data(label)',
                         'background-color': '#0074D9',
                         'text-valign': 'center',
-                        'color': '#fff',
+                        'color': isInDarkMode ? "#eee" : "#555",
                         'font-size': '10px',
                         'width': '40px',
                         'height': '40px'
@@ -237,28 +238,27 @@ function renderGraph(graphData, fullRedraw = false) {
                 {
                     selector: 'node.selected-diff',
                     style: {
-                        'border-width': '4px',
+                        'border-width': '2px',
                         'border-color': 'red'
                     }
                 },
                 {
                     selector: 'edge',
                     style: {
-                        'width': 2,
+                        'width': 0.5,
                         'line-color': '#aaa',
                         'curve-style': 'bezier',
                         'label': 'data(weight)',
                         'font-size': '8px',
+                        'color': isInDarkMode ? "#eee" : "#555",
                         'text-rotation': 'autorotate'
                     }
                 }
             ],
             layout: {
-                // name: 'cose',
                 name: 'cola',
                 padding: 30,
-                // animate: true,
-                // animationDuration: 500
+                fit: true
             }
         });
 
@@ -334,19 +334,13 @@ function renderGraph(graphData, fullRedraw = false) {
     }
 }
 
-// Function to update the diff output based on current controls.
-function updateDiffOutput() {
-    const outputFormat = document.getElementById("diffOutputFormat").value;
-    const diffHtml = Diff2Html.html(currentDiffString, {
-        drawFileList: true,
-        matching: "lines",
-        outputFormat: outputFormat
-    });
-    document.getElementById("diffOutput").innerHTML = diffHtml;
-}
-
-// Show a modal with the diff of two files.
+/*
+  Editable Diff Modal with ACE Editor in LaTeX mode.
+  (Ensure your modal HTML has two <div> elements with IDs "editorA" and "editorB",
+  diff setting controls with IDs "diffWrap" and "diffOutputFormat", and a container with ID "diffOutput".)
+*/
 function showDiffModal(nodeA, nodeB) {
+    // Clear any active tooltips.
     if (currentGraph) {
         currentGraph.nodes().forEach(node => node.trigger('mouseout'));
     }
@@ -354,19 +348,69 @@ function showDiffModal(nodeA, nodeB) {
     const fileNameB = nodeB.data('label');
     const contentA = nodeA.data('content') || "";
     const contentB = nodeB.data('content') || "";
-    currentDiffString = Diff.createTwoFilesPatch(fileNameA, fileNameB, contentA, contentB);
 
-    // Initialize diff output using the current selections.
-    updateDiffOutput();
+    // Initialize ACE editors in the divs.
+    let aceOptions = {
+        theme: "ace/theme/" + (isInDarkMode ? "monokai" : "chrome"),
+        showGutter: true,
+        fadeFoldWidgets: false,
+        showFoldWidgets: true,
+        wrap: true,
+        showPrintMargin: false,
+        // maxLines: Infinity
+    };
 
-    // Attach event listeners for the controls.
-    document.getElementById("diffOutputFormat").onchange = updateDiffOutput;
+    let editorA = ace.edit("editorA", aceOptions);
+    editorA.session.setMode("ace/mode/latex");
+    editorA.setValue(contentA, -1); // -1 moves cursor to start without selecting text
 
+    let editorB = ace.edit("editorB", aceOptions);
+    editorB.session.setMode("ace/mode/latex");
+    editorB.setValue(contentB, -1);
+
+    // Function to update the diff output based on the current editor values and diff controls.
+    function updateEditableDiff() {
+        const newContentA = editorA.getValue();
+        const newContentB = editorB.getValue();
+        const wrap = document.getElementById("diffWrap").value;
+        const outputFormat = document.getElementById("diffOutputFormat").value;
+        // Generate a unified diff string.
+        let diffString = Diff.createTwoFilesPatch(fileNameA, fileNameB, newContentA, newContentB);
+        const diffHtml = Diff2Html.html(diffString, {
+            drawFileList: false,
+            matching: "lines",
+            wrap: wrap === "yes",
+            outputFormat: outputFormat,
+            colorScheme: isInDarkMode ? "dark" : "light"
+        });
+        document.getElementById("diffOutput").innerHTML = diffHtml;
+    }
+
+    // Debounce the update function.
+    const debouncedUpdate = debounce(updateEditableDiff, 300);
+    // Attach change listeners to the ACE sessions.
+    editorA.session.on('change', debouncedUpdate);
+    editorB.session.on('change', debouncedUpdate);
+
+    // Also update diff when the user changes the diff setting controls.
+    document.getElementById("diffWrap").onchange = updateEditableDiff;
+    document.getElementById("diffOutputFormat").onchange = updateEditableDiff;
+
+    // Initial diff render.
+    updateEditableDiff();
+
+    // Show the modal.
     const diffModalEl = document.getElementById('diffModal');
     const diffModal = new bootstrap.Modal(diffModalEl, {});
     modalIsOpen = true;
     diffModalEl.addEventListener('hidden.bs.modal', () => {
         modalIsOpen = false;
+        // Destroy ACE editors to avoid duplicates.
+        editorA.destroy();
+        editorB.destroy();
+        // Optionally clear the div contents.
+        document.getElementById("editorA").innerHTML = "";
+        document.getElementById("editorB").innerHTML = "";
     }, { once: true });
     diffModal.show();
 }
