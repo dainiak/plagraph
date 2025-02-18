@@ -1,6 +1,8 @@
 const isInDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
 document.body && document.body.setAttribute("data-bs-theme", isInDarkMode ? "dark" : "light");
 
+const wrapControl = document.getElementById("diffWrap");
+
 // Register cytoscape-popper with popper@2 if available
 if (typeof Popper !== 'undefined' && typeof cytoscapePopper !== 'undefined') {
     cytoscape.use(cytoscapePopper(Popper.createPopper));
@@ -11,6 +13,9 @@ if (typeof cytoscape === 'undefined') {
 
 // Global flag to indicate if the diff modal is open.
 let modalIsOpen = false;
+
+// Global variable for tracking maximum similarity observed.
+let maxSimilarity = 0;
 
 // Debounce utility: calls func after delay ms of inactivity.
 // Also provides a cancel() method to cancel any pending call.
@@ -86,12 +91,12 @@ progressDiv.innerText = "Progress: 0%";
 // Debounced function to update graph edges.
 const debouncedUpdateGraphEdges = debounce(() => {
     if (lastGraphData && currentGraph) updateGraphEdges();
-}, 500);
+}, 300);
 
 const thresholdSlider = document.getElementById('threshold');
 thresholdSlider.addEventListener('input', (e) => {
     threshold = parseFloat(e.target.value);
-    document.getElementById('threshold-value').innerText = threshold.toFixed(2);
+    document.getElementById('threshold-value').innerText = threshold.toFixed(2) + " / " + maxSimilarity.toFixed(2);
     debouncedUpdateGraphEdges();
 });
 thresholdSlider.addEventListener('change', (e) => {
@@ -174,7 +179,26 @@ async function handleZipFile(zipFile) {
         worker.onmessage = (e) => {
             const msg = e.data;
             if (msg.type === "batch") {
+                // Append batch edges.
                 lastGraphData.allEdges = lastGraphData.allEdges.concat(msg.batchEdges);
+                // Update maxSimilarity based on newly received edges.
+                msg.batchEdges.forEach(edge => {
+                    if (edge.similarity > maxSimilarity) {
+                        maxSimilarity = edge.similarity;
+                    }
+                });
+                // Update the slider's max and step.
+                thresholdSlider.max = maxSimilarity;
+                thresholdSlider.step = (maxSimilarity / 100).toFixed(3);
+                // Update display label.
+                if (threshold > maxSimilarity) {
+                    threshold = maxSimilarity;
+                    document.getElementById('threshold').value = threshold;
+                }
+
+                document.getElementById('threshold-value').innerText = threshold.toFixed(2) + " / " + maxSimilarity.toFixed(2);
+
+                // Add new edges that meet current threshold.
                 if (currentGraph) {
                     msg.batchEdges.forEach(edge => {
                         if (edge.similarity >= threshold &&
@@ -231,14 +255,14 @@ function renderGraph(graphData, fullRedraw = false) {
                         'text-valign': 'center',
                         'color': isInDarkMode ? "#eee" : "#555",
                         'font-size': '10px',
-                        'width': '40px',
-                        'height': '40px'
+                        'width': '20px',
+                        'height': '20px'
                     }
                 },
                 {
                     selector: 'node.selected-diff',
                     style: {
-                        'border-width': '2px',
+                        'border-width': '1px',
                         'border-color': 'red'
                     }
                 },
@@ -334,8 +358,26 @@ function renderGraph(graphData, fullRedraw = false) {
     }
 }
 
+// Helper: Return the ACE editor mode based on the file extension.
+function getAceMode(fileName) {
+    const ext = fileName.split('.').pop().toLowerCase();
+    const modeMapping = {
+        'c': 'ace/mode/c_cpp',
+        'cpp': 'ace/mode/c_cpp',
+        'py': 'ace/mode/python',
+        'java': 'ace/mode/java',
+        'js': 'ace/mode/javascript',
+        'md': 'ace/mode/markdown',
+        'tex': 'ace/mode/latex',
+        'json': 'ace/mode/json',
+        'yaml': 'ace/mode/yaml',
+        'yml': 'ace/mode/yaml',
+    };
+    return modeMapping[ext] || 'ace/mode/text';
+}
+
 /*
-  Editable Diff Modal with ACE Editor in LaTeX mode.
+  Editable Diff Modal with ACE Editor in a mode based on file extension.
   (Ensure your modal HTML has two <div> elements with IDs "editorA" and "editorB",
   diff setting controls with IDs "diffWrap" and "diffOutputFormat", and a container with ID "diffOutput".)
 */
@@ -355,31 +397,37 @@ function showDiffModal(nodeA, nodeB) {
         showGutter: true,
         fadeFoldWidgets: false,
         showFoldWidgets: true,
-        wrap: true,
+        wrap: wrapControl.value === "yes",
         showPrintMargin: false,
-        // maxLines: Infinity
     };
 
+    // Determine the mode based on the file extension.
+    let modeA = getAceMode(fileNameA);
     let editorA = ace.edit("editorA", aceOptions);
-    editorA.session.setMode("ace/mode/latex");
+    editorA.session.setMode(modeA);
     editorA.setValue(contentA, -1); // -1 moves cursor to start without selecting text
 
+    let modeB = getAceMode(fileNameB);
     let editorB = ace.edit("editorB", aceOptions);
-    editorB.session.setMode("ace/mode/latex");
+    editorB.session.setMode(modeB);
     editorB.setValue(contentB, -1);
+
+    wrapControl.onchange = () => {
+        let wrap = wrapControl.value === "yes";
+        editorA.setOption("wrap", wrap);
+        editorB.setOption("wrap", wrap);
+    }
 
     // Function to update the diff output based on the current editor values and diff controls.
     function updateEditableDiff() {
         const newContentA = editorA.getValue();
         const newContentB = editorB.getValue();
-        const wrap = document.getElementById("diffWrap").value;
         const outputFormat = document.getElementById("diffOutputFormat").value;
         // Generate a unified diff string.
         let diffString = Diff.createTwoFilesPatch(fileNameA, fileNameB, newContentA, newContentB);
         const diffHtml = Diff2Html.html(diffString, {
             drawFileList: false,
             matching: "lines",
-            wrap: wrap === "yes",
             outputFormat: outputFormat,
             colorScheme: isInDarkMode ? "dark" : "light"
         });
@@ -387,13 +435,12 @@ function showDiffModal(nodeA, nodeB) {
     }
 
     // Debounce the update function.
-    const debouncedUpdate = debounce(updateEditableDiff, 300);
+    const debouncedUpdate = debounce(updateEditableDiff, 100);
     // Attach change listeners to the ACE sessions.
     editorA.session.on('change', debouncedUpdate);
     editorB.session.on('change', debouncedUpdate);
 
     // Also update diff when the user changes the diff setting controls.
-    document.getElementById("diffWrap").onchange = updateEditableDiff;
     document.getElementById("diffOutputFormat").onchange = updateEditableDiff;
 
     // Initial diff render.
