@@ -4,9 +4,25 @@
     <meta charset="UTF-8">
     <title>Plagiarism Detection App</title>
 
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
-    <!-- Diff2Html CSS for colored diff view -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/diff2html@3.4.51/bundles/css/diff2html.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/css/bootstrap.min.css" integrity="sha512-jnSuA4Ss2PkkikSOLtYs8BlYIeeIK1h99ty4YfvRPAlzr377vr3CXDb7sb7eEEBYjDtcYj+AjBH3FLv5uSJuXg==" crossorigin="anonymous" referrerpolicy="no-referrer" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/js/bootstrap.bundle.min.js" integrity="sha512-7Pi/otdlbbCR+LnW+F7PwFcSDJOuUJB3OxtEHbg4vSMvzvJjde4Po1v4BR9Gdc9aXNUNFVUY+SK51wWT8WF0Gg==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/diff2html@3.4.51/bundles/css/diff2html.min.css" integrity="sha256-IMBK4VNZp0ivwefSn51bswdsrhk0HoMTLc2GqFHFBXg=" crossorigin="anonymous">
+    <script src="https://cdn.jsdelivr.net/npm/diff2html@3.4.51/bundles/js/diff2html.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/diff@7.0.0/dist/diff.min.js" integrity="sha256-wqCU6CxON0fxBT9c/wJ/dGEm4mA9b7AVuGfrAuCgmO4=" crossorigin="anonymous"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.36.3/ace.min.js" integrity="sha512-faieT+YRcxd+aQZbK6m2iaKhYEKkDvwbn7n2WToge2+k6+YBlxbT/Wii5bVPUWpnXm186SPynzVfc+ME8a/a3Q==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js" integrity="sha256-rMfkFFWoB2W1/Zx+4bgHim0WC7vKRVrq6FTeZclH1Z4=" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/lzma@2.3.2/src/lzma_worker.min.js"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/cytoscape@3.31.0/dist/cytoscape.min.js" integrity="sha256-59TGwoa+4Lo0bGjtHIuLgrR0C3W+XQxNZgLuON9V2cE=" crossorigin="anonymous"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/2.11.8/umd/popper.min.js" integrity="sha512-TPh2Oxlg1zp+kz3nFA0C5vVC6leG/6mm1z9+mA81MI5eaUVqasPLO8Cuk4gMF4gUfP5etR73rgU/8PNMsSesoQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <script src="https://cdn.jsdelivr.net/npm/cytoscape-popper@4.0.1/cytoscape-popper.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/webcola@3.4.0/WebCola/cola.min.js" integrity="sha256-tF66P7AtItnqmivK0H3b7IKW+AfwXpb4ydSrvEl/Zcc=" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/cytoscape-cola@2.5.1/cytoscape-cola.min.js"></script>
+
+    <link rel="stylesheet" href="https://unpkg.com/@sjmc11/tourguidejs/dist/css/tour.min.css">
+    <script src="https://unpkg.com/@sjmc11/tourguidejs/dist/tour.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
     <style>
         /* Style for the drop zone when hovered */
@@ -15,20 +31,6 @@
             border-color: #007bff;
         }
     </style>
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.36.3/ace.min.js" integrity="sha512-faieT+YRcxd+aQZbK6m2iaKhYEKkDvwbn7n2WToge2+k6+YBlxbT/Wii5bVPUWpnXm186SPynzVfc+ME8a/a3Q==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/lzma@2.3.2/src/lzma_worker.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/cytoscape@3.31.0/dist/cytoscape.min.js"></script>
-    <script src="https://unpkg.com/@popperjs/core@2"></script>
-    <script src="https://cdn.jsdelivr.net/npm/cytoscape-popper@4.0.1/cytoscape-popper.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/webcola@3.4.0/WebCola/cola.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/cytoscape-cola@2.5.1/cytoscape-cola.min.js"></script>
-    <!-- jsdiff for computing unified diffs -->
-    <script src="https://cdn.jsdelivr.net/npm/diff@7.0.0/dist/diff.min.js"></script>
-    <!-- diff2html to render diff output with colored blocks -->
-    <script src="https://cdn.jsdelivr.net/npm/diff2html@3.4.51/bundles/js/diff2html.min.js"></script>
 </head>
 <body>
 <div class="container my-4">
@@ -38,26 +40,29 @@
 
     <!-- Drag-n-Drop Zone and Controls -->
     <section id="controls" class="mb-4">
-        <div id="drop-zone" class="border border-secondary rounded p-4 text-center mb-3">
+        <div id="drop-zone" class="border border-secondary rounded p-4 text-center mb-3"
+             data-tg-tour="Drop a zip file with individual text files to check them pairwise for similarity.">
             Drag &amp; Drop Your ZIP File Here
         </div>
         <!-- Progress Element (if not created dynamically) -->
-        <div id="progress" class="alert alert-info mt-3">Progress: 0%</div>
+        <div id="progress" class="alert alert-info mt-3"
+             data-tg-tour="When the progress is at 100% your similarity graph is fully loaded.">Progress: 0%</div>
 
         <div class="d-flex justify-content-between align-items-center mb-3">
-            <div>
+            <div data-tg-tour="Adjust the threshold to display the edges between the most similar files.">
                 <label for="threshold" class="form-label me-2">Edge Threshold:</label>
                 <input type="range" id="threshold" min="0" max="1" step="0.01" value="0.5">
                 <span id="threshold-value" class="ms-2">0.50</span>
             </div>
-            <div>
+            <div data-tg-tour="Save/load file from your browser local storage.">
                 <button id="save-graph" class="btn btn-primary me-2">Save Graph</button>
                 <button id="load-graph" class="btn btn-secondary">Load Graph</button>
             </div>
         </div>
     </section>
 
-    <section id="graph-container" class="border rounded" style="height: 600px;"></section>
+    <section id="graph-container" class="border rounded" style="height: 600px;"
+             data-tg-tour="The graph will be shown here. Ctrl+Click or Shift+Click on a pair of nodes to display the diff for the corresponding pair of texts."></section>
 </div>
 
 <!-- Modal for showing file diff -->

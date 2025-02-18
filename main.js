@@ -324,24 +324,24 @@ function renderGraph(graphData, fullRedraw = false) {
                 });
             }
             node.on("click", (e) => {
-                if (e.originalEvent.ctrlKey) {
-                    if (!node.selectedForDiff) {
-                        node.selectedForDiff = true;
-                        node.addClass("selected-diff");
-                        diffSelection.push(node);
-                    } else {
-                        node.selectedForDiff = false;
-                        node.removeClass("selected-diff");
-                        diffSelection = diffSelection.filter((n) => n.id() !== node.id());
-                    }
-                    if (diffSelection.length === 2) {
-                        showDiffModal(diffSelection[0], diffSelection[1]);
-                        diffSelection.forEach((n) => {
-                            n.selectedForDiff = false;
-                            n.removeClass("selected-diff");
-                        });
-                        diffSelection = [];
-                    }
+                if (!e.originalEvent.ctrlKey && !e.originalEvent.shiftKey)
+                    return;
+                if (!node.selectedForDiff) {
+                    node.selectedForDiff = true;
+                    node.addClass("selected-diff");
+                    diffSelection.push(node);
+                } else {
+                    node.selectedForDiff = false;
+                    node.removeClass("selected-diff");
+                    diffSelection = diffSelection.filter((n) => n.id() !== node.id());
+                }
+                if (diffSelection.length === 2) {
+                    showDiffModal(diffSelection[0], diffSelection[1]);
+                    diffSelection.forEach((n) => {
+                        n.selectedForDiff = false;
+                        n.removeClass("selected-diff");
+                    });
+                    diffSelection = [];
                 }
             });
         });
@@ -466,3 +466,7 @@ loadGraphButton.addEventListener("click", () => {
         alert("No saved graph found.");
     }
 });
+
+
+const tg = new tourguide.TourGuideClient();
+tg.start();
