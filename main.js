@@ -6,6 +6,9 @@ if (typeof cytoscape === 'undefined') {
     cytoscape.use(cytoscapeCola);
 }
 
+// Global flag to indicate if the diff modal is open.
+let modalIsOpen = false;
+
 // Debounce utility: calls func after delay ms of inactivity.
 // Also provides a cancel() method to cancel any pending call.
 function debounce(func, delay) {
@@ -72,6 +75,8 @@ async function convertZipToFileObjects(zipFile) {
 let currentGraph = null;
 let threshold = parseFloat(document.getElementById('threshold').value);
 let lastGraphData = null;
+// Global diff selection (for storing two nodes selected with Ctrl)
+let diffSelection = [];
 
 // Ensure there's a progress element; if not, create one.
 let progressDiv = document.getElementById('progress');
@@ -191,11 +196,13 @@ async function handleZipFile(zipFile) {
         }
 
         // Immediately render an empty graph with all nodes.
+        // NOTE: we now also include the file 'content' so that we can later show diffs.
         const nodes = fileData.map(file => ({
             data: {
                 id: file.path,
                 label: file.fileName,
-                tooltip: file.tooltip  // stored tooltip property
+                tooltip: file.tooltip,  // stored tooltip property
+                content: file.content   // store the file content for diffing
             }
         }));
         // Initialize lastGraphData with nodes and an empty allEdges array.
@@ -280,6 +287,14 @@ function renderGraph(graphData, fullRedraw = false) {
                         'height': '40px'
                     }
                 },
+                // Cytoscape style for diff-selected nodes (using canvas properties)
+                {
+                    selector: 'node.selected-diff',
+                    style: {
+                        'border-width': '4px',
+                        'border-color': 'red'
+                    }
+                },
                 {
                     selector: 'edge',
                     style: {
@@ -314,6 +329,9 @@ function renderGraph(graphData, fullRedraw = false) {
         currentGraph.nodes().forEach(function(node) {
             if (node.data('tooltip')) {
                 node.on('mouseover', function(e) {
+                    // Do not create a tooltip if the modal is open.
+                    if (modalIsOpen) return;
+
                     // Create the popper instance on mouseover.
                     var popperInstance = node.popper({
                         content: function(){
@@ -348,6 +366,32 @@ function renderGraph(graphData, fullRedraw = false) {
                     }
                 });
             }
+
+            // Attach a click handler for diff selection (only if Ctrl key is held).
+            node.on('click', function(e) {
+                if (e.originalEvent.ctrlKey) {
+                    // Toggle selection state.
+                    if (!node.selectedForDiff) {
+                        node.selectedForDiff = true;
+                        node.addClass('selected-diff');
+                        diffSelection.push(node);
+                    } else {
+                        node.selectedForDiff = false;
+                        node.removeClass('selected-diff');
+                        diffSelection = diffSelection.filter(n => n.id() !== node.id());
+                    }
+                    // When exactly two nodes are selected, show the diff modal.
+                    if (diffSelection.length === 2) {
+                        showDiffModal(diffSelection[0], diffSelection[1]);
+                        // Clear diff selection highlighting.
+                        diffSelection.forEach(n => {
+                            n.selectedForDiff = false;
+                            n.removeClass('selected-diff');
+                        });
+                        diffSelection = [];
+                    }
+                }
+            });
         });
 
     } else {
@@ -358,6 +402,48 @@ function renderGraph(graphData, fullRedraw = false) {
             }
         });
     }
+}
+
+// Show a modal with the diff of two files.
+// Uses jsdiff to create a unified diff string and diff2html to render the diff.
+function showDiffModal(nodeA, nodeB) {
+    // Before showing the modal, trigger 'mouseout' on all nodes to clear any active tooltips.
+    if (currentGraph) {
+        currentGraph.nodes().forEach(node => node.trigger('mouseout'));
+    }
+
+    const fileNameA = nodeA.data('label');
+    const fileNameB = nodeB.data('label');
+    const contentA = nodeA.data('content') || "";
+    const contentB = nodeB.data('content') || "";
+
+    // Create a unified diff string using jsdiff.
+    const diffString = Diff.createTwoFilesPatch(fileNameA, fileNameB, contentA, contentB);
+
+    // Generate HTML from the diff string using diff2html.
+    const diffHtml = Diff2Html.html(diffString, {
+        drawFileList: true,
+        // matching: 'lines',
+        matching: 'words',
+        outputFormat: 'side-by-side'
+    });
+
+    // Inject the diff HTML into the modal body.
+    document.getElementById('diffModalBody').innerHTML = diffHtml;
+
+    // Show the modal using Bootstrap's modal API.
+    const diffModalEl = document.getElementById('diffModal');
+    const diffModal = new bootstrap.Modal(diffModalEl, {});
+
+    // Set the modal flag to true.
+    modalIsOpen = true;
+
+    // When the modal is hidden, reset the flag.
+    diffModalEl.addEventListener('hidden.bs.modal', () => {
+        modalIsOpen = false;
+    }, { once: true });
+
+    diffModal.show();
 }
 
 // Save the current graph data to localStorage.
