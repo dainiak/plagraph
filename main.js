@@ -1,24 +1,40 @@
-const isInDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
-document.body && document.body.setAttribute("data-bs-theme", isInDarkMode ? "dark" : "light");
+const isInDarkMode = window.matchMedia("(prefers-color-scheme: dark)").matches;
+if (document.body) {
+    document.body.setAttribute("data-bs-theme", isInDarkMode ? "dark" : "light");
+}
 
 const wrapControl = document.getElementById("diffWrap");
+const graphContainer = document.getElementById("graph-container");
+const thresholdSlider = document.getElementById("threshold");
+const thresholdValueDisplay = document.getElementById("threshold-value");
 
-// Register cytoscape-popper with popper@2 if available
-if (typeof Popper !== 'undefined' && typeof cytoscapePopper !== 'undefined') {
+// Register cytoscape-popper with popper@2 if available.
+if (typeof Popper !== "undefined" && typeof cytoscapePopper !== "undefined") {
     cytoscape.use(cytoscapePopper(Popper.createPopper));
 }
-if (typeof cytoscape === 'undefined') {
+if (typeof cytoscape === "undefined") {
     cytoscape.use(cytoscapeCola);
 }
 
-// Global flag to indicate if the diff modal is open.
+// Global flags and variables.
 let modalIsOpen = false;
-
-// Global variable for tracking maximum similarity observed.
 let maxSimilarity = 0;
+let currentGraph = null;
+let threshold = parseFloat(thresholdSlider.value);
+let lastGraphData = null;
+let diffSelection = [];
+
+// Create (or reuse) a progress div.
+const progressDiv = document.getElementById("progress") || (() => {
+    const div = document.createElement("div");
+    div.id = "progress";
+    div.className = "alert alert-info mt-3";
+    document.body.insertBefore(div, graphContainer);
+    return div;
+})();
+progressDiv.innerText = "Progress: 0%";
 
 // Debounce utility: calls func after delay ms of inactivity.
-// Also provides a cancel() method to cancel any pending call.
 function debounce(func, delay) {
     let timeoutId;
     function debounced(...args) {
@@ -38,88 +54,65 @@ function debounce(func, delay) {
 }
 
 // Convert a ZIP file into an array of file objects.
-// Each object contains: fileName, path, content, compSize, comparison_key, tooltip.
 async function convertZipToFileObjects(zipFile) {
     const zip = new JSZip();
-    const zipContent = await zip.loadAsync(zipFile);
+    await zip.loadAsync(zipFile);
     const entries = [];
     zip.forEach((relativePath, zipEntry) => {
-        if (!zipEntry.dir && relativePath.indexOf('.') !== -1) {
+        if (!zipEntry.dir && relativePath.indexOf(".") !== -1) {
             entries.push(zipEntry);
         }
     });
     if (entries.length === 0) return [];
     const results = [];
-    for (let entry of entries) {
+    for (const entry of entries) {
         const content = await entry.async("string");
         const compSize = await compressText(content);
-        const parts = entry.name.split('/');
+        const parts = entry.name.split("/");
         const fileName = parts[parts.length - 1];
         let comparison_key = "";
-        if (fileName.indexOf('.') !== -1) {
-            comparison_key = fileName.split('.').pop().toLowerCase();
+        if (fileName.indexOf(".") !== -1) {
+            comparison_key = fileName.split(".").pop().toLowerCase();
         }
-        const tooltip = fileName;
         results.push({
             fileName: fileName,
             path: entry.name,
             content: content,
             compSize: compSize,
             comparison_key: comparison_key,
-            tooltip: tooltip
+            tooltip: fileName,
         });
     }
     return results;
 }
 
-// Global variables
-let currentGraph = null;
-let threshold = parseFloat(document.getElementById('threshold').value);
-let lastGraphData = null;
-let diffSelection = [];
-
-// Ensure there's a progress element.
-let progressDiv = document.getElementById('progress');
-if (!progressDiv) {
-    progressDiv = document.createElement('div');
-    progressDiv.id = 'progress';
-    progressDiv.className = "alert alert-info mt-3";
-    document.body.insertBefore(progressDiv, document.getElementById('graph-container'));
-}
-progressDiv.innerText = "Progress: 0%";
-
-// Debounced function to update graph edges.
-const debouncedUpdateGraphEdges = debounce(() => {
-    if (lastGraphData && currentGraph) updateGraphEdges();
-}, 300);
-
-const thresholdSlider = document.getElementById('threshold');
-thresholdSlider.addEventListener('input', (e) => {
+thresholdSlider.addEventListener("input", (e) => {
     threshold = parseFloat(e.target.value);
-    document.getElementById('threshold-value').innerText = threshold.toFixed(2) + " / " + maxSimilarity.toFixed(2);
+    thresholdValueDisplay.innerText = `${threshold.toFixed(2)} / ${maxSimilarity.toFixed(2)}`;
     debouncedUpdateGraphEdges();
 });
-thresholdSlider.addEventListener('change', (e) => {
+thresholdSlider.addEventListener("change", () => {
     debouncedUpdateGraphEdges.cancel();
     if (lastGraphData && currentGraph) updateGraphEdges();
 });
 
+// Update graph edges based on the current threshold.
 function updateGraphEdges() {
     const newEdges = lastGraphData.allEdges
-        .filter(edge => edge.similarity >= threshold)
-        .map(edge => ({
-            id: edge.source + "_" + edge.target,
+        .filter((edge) => edge.similarity >= threshold)
+        .map((edge) => ({
+            id: `${edge.source}_${edge.target}`,
             source: edge.source,
             target: edge.target,
-            weight: edge.similarity.toFixed(2)
+            weight: edge.similarity.toFixed(2),
         }));
-    const newEdgeIds = newEdges.map(edge => edge.id);
-    currentGraph.edges().forEach(edge => {
+    const newEdgeIds = newEdges.map((edge) => edge.id);
+    currentGraph.edges().forEach((edge) => {
         if (!newEdgeIds.includes(edge.id())) {
             edge.remove();
         }
     });
-    newEdges.forEach(edgeData => {
+    newEdges.forEach((edgeData) => {
         if (!currentGraph.getElementById(edgeData.id).length) {
             currentGraph.add({ data: edgeData });
         }
@@ -127,26 +120,31 @@ function updateGraphEdges() {
     const layout = currentGraph.layout({
         name: "cola",
         fit: true,
-        padding: 30
+        padding: 30,
     });
     layout.run();
 }
 
+const debouncedUpdateGraphEdges = debounce(() => {
+    if (lastGraphData && currentGraph) updateGraphEdges();
+}, 300);
+
 // Drag-n-Drop setup.
-const dropZone = document.getElementById('drop-zone');
-dropZone.addEventListener('dragover', (e) => {
+const dropZone = document.getElementById("drop-zone");
+dropZone.addEventListener("dragover", (e) => {
     e.preventDefault();
-    dropZone.classList.add('hover');
+    dropZone.classList.add("hover");
 });
-dropZone.addEventListener('dragleave', (e) => {
-    dropZone.classList.remove('hover');
+dropZone.addEventListener("dragleave", () => {
+    dropZone.classList.remove("hover");
 });
-dropZone.addEventListener('drop', async (e) => {
+dropZone.addEventListener("drop", async (e) => {
     e.preventDefault();
-    dropZone.classList.remove('hover');
+    dropZone.classList.remove("hover");
     if (e.dataTransfer.files.length > 0) await handleZipFile(e.dataTransfer.files[0]);
 });
 
+// Compress text using LZMA.
 function compressText(text) {
     return new Promise((resolve, reject) => {
         LZMA.compress(text, 9, (result, error) => {
@@ -156,6 +154,7 @@ function compressText(text) {
     });
 }
 
+// Process the ZIP file and render the graph.
 async function handleZipFile(zipFile) {
     progressDiv.innerText = "Progress: 0%";
     try {
@@ -164,25 +163,25 @@ async function handleZipFile(zipFile) {
             alert("No files with an extension found in the ZIP archive.");
             return;
         }
-        const nodes = fileData.map(file => ({
+        const nodes = fileData.map((file) => ({
             data: {
                 id: file.path,
                 label: file.fileName,
                 tooltip: file.tooltip,
-                content: file.content
-            }
+                content: file.content,
+            },
         }));
         lastGraphData = { nodes, allEdges: [] };
         renderGraph(lastGraphData, true);
-        const worker = new Worker('ncdWorker.js');
-        worker.postMessage({ fileData: fileData });
+        const worker = new Worker("ncdWorker.js");
+        worker.postMessage({ fileData });
         worker.onmessage = (e) => {
             const msg = e.data;
             if (msg.type === "batch") {
                 // Append batch edges.
                 lastGraphData.allEdges = lastGraphData.allEdges.concat(msg.batchEdges);
                 // Update maxSimilarity based on newly received edges.
-                msg.batchEdges.forEach(edge => {
+                msg.batchEdges.forEach((edge) => {
                     if (edge.similarity > maxSimilarity) {
                         maxSimilarity = edge.similarity;
                     }
@@ -190,31 +189,30 @@ async function handleZipFile(zipFile) {
                 // Update the slider's max and step.
                 thresholdSlider.max = maxSimilarity;
                 thresholdSlider.step = (maxSimilarity / 100).toFixed(3);
-                // Update display label.
                 if (threshold > maxSimilarity) {
                     threshold = maxSimilarity;
-                    document.getElementById('threshold').value = threshold;
+                    thresholdSlider.value = threshold;
                 }
-
-                document.getElementById('threshold-value').innerText = threshold.toFixed(2) + " / " + maxSimilarity.toFixed(2);
-
+                thresholdValueDisplay.innerText = `${threshold.toFixed(2)} / ${maxSimilarity.toFixed(2)}`;
                 // Add new edges that meet current threshold.
                 if (currentGraph) {
-                    msg.batchEdges.forEach(edge => {
-                        if (edge.similarity >= threshold &&
-                            !currentGraph.getElementById(edge.source + "_" + edge.target).length) {
+                    msg.batchEdges.forEach((edge) => {
+                        if (
+                            edge.similarity >= threshold &&
+                            !currentGraph.getElementById(`${edge.source}_${edge.target}`).length
+                        ) {
                             currentGraph.add({
                                 data: {
-                                    id: edge.source + "_" + edge.target,
+                                    id: `${edge.source}_${edge.target}`,
                                     source: edge.source,
                                     target: edge.target,
-                                    weight: edge.similarity.toFixed(2)
-                                }
+                                    weight: edge.similarity.toFixed(2),
+                                },
                             });
                         }
                     });
                 }
-                progressDiv.innerText = "Progress: " + msg.progress.toFixed(1) + "%";
+                progressDiv.innerText = `Progress: ${msg.progress.toFixed(1)}%`;
             } else if (msg.type === "complete") {
                 progressDiv.innerText = "Progress: 100% (Completed)";
                 worker.terminate();
@@ -226,123 +224,120 @@ async function handleZipFile(zipFile) {
     }
 }
 
+// Render the cytoscape graph.
 function renderGraph(graphData, fullRedraw = false) {
     const filteredEdges = graphData.allEdges
-        .filter(edge => edge.similarity >= threshold)
-        .map(edge => ({
+        .filter((edge) => edge.similarity >= threshold)
+        .map((edge) => ({
             data: {
-                id: edge.source + "_" + edge.target,
+                id: `${edge.source}_${edge.target}`,
                 source: edge.source,
                 target: edge.target,
-                weight: edge.similarity.toFixed(2)
-            }
+                weight: edge.similarity.toFixed(2),
+            },
         }));
     if (fullRedraw) {
-        const elements = [
-            ...graphData.nodes,
-            ...filteredEdges
-        ];
+        const elements = [...graphData.nodes, ...filteredEdges];
         if (currentGraph) currentGraph.destroy();
         currentGraph = cytoscape({
-            container: document.getElementById('graph-container'),
+            container: graphContainer,
             elements: elements,
             style: [
                 {
-                    selector: 'node',
+                    selector: "node",
                     style: {
-                        'label': 'data(label)',
-                        'background-color': '#0074D9',
-                        'text-valign': 'center',
-                        'color': isInDarkMode ? "#eee" : "#555",
-                        'font-size': '10px',
-                        'width': '20px',
-                        'height': '20px'
-                    }
+                        label: "data(label)",
+                        "background-color": "#0074D9",
+                        "text-valign": "center",
+                        color: isInDarkMode ? "#eee" : "#555",
+                        "font-size": "10px",
+                        width: "20px",
+                        height: "20px",
+                    },
                 },
                 {
-                    selector: 'node.selected-diff',
+                    selector: "node.selected-diff",
                     style: {
-                        'border-width': '1px',
-                        'border-color': 'red'
-                    }
+                        "border-width": "1px",
+                        "border-color": "red",
+                    },
                 },
                 {
-                    selector: 'edge',
+                    selector: "edge",
                     style: {
-                        'width': 0.5,
-                        'line-color': '#aaa',
-                        'curve-style': 'bezier',
-                        'label': 'data(weight)',
-                        'font-size': '8px',
-                        'color': isInDarkMode ? "#eee" : "#555",
-                        'text-rotation': 'autorotate'
-                    }
-                }
+                        width: 0.5,
+                        "line-color": "#aaa",
+                        "curve-style": "bezier",
+                        label: "data(weight)",
+                        "font-size": "8px",
+                        color: isInDarkMode ? "#eee" : "#555",
+                        "text-rotation": "autorotate",
+                    },
+                },
             ],
             layout: {
-                name: 'cola',
+                name: "cola",
                 padding: 30,
-                fit: true
-            }
+                fit: true,
+            },
         });
 
-        function makeDiv(text) {
-            let div = document.createElement('div');
-            div.classList.add('popover', 'bs-popover-top', 'p-2');
+        // Helper to create a popover div.
+        const makeDiv = (text) => {
+            const div = document.createElement("div");
+            div.classList.add("popover", "bs-popover-top", "p-2");
             div.innerHTML = text;
             document.body.appendChild(div);
             return div;
-        }
+        };
 
-        currentGraph.nodes().forEach(function(node) {
-            if (node.data('tooltip')) {
-                node.on('mouseover', function(e) {
+        currentGraph.nodes().forEach((node) => {
+            if (node.data("tooltip")) {
+                node.on("mouseover", () => {
                     if (modalIsOpen) return;
-                    let popperInstance = node.popper({
-                        content: function(){
-                            return makeDiv(node.data('tooltip'));
-                        },
-                        popper: { placement: 'top' }
+                    const popperInstance = node.popper({
+                        content: () => makeDiv(node.data("tooltip")),
+                        popper: { placement: "top" },
                     });
-                    node.scratch('popper', popperInstance);
-                    let updateFn = function(){ popperInstance.update(); };
-                    node.scratch('popperUpdate', updateFn);
-                    node.on('position', updateFn);
-                    currentGraph.on('pan zoom resize', updateFn);
+                    node.scratch("popper", popperInstance);
+                    const updateFn = () => popperInstance.update();
+                    node.scratch("popperUpdate", updateFn);
+                    node.on("position", updateFn);
+                    currentGraph.on("pan zoom resize", updateFn);
                 });
-                node.on('mouseout', function(e) {
-                    let popperInstance = node.scratch('popper');
-                    let updateFn = node.scratch('popperUpdate');
+                node.on("mouseout", () => {
+                    const popperInstance = node.scratch("popper");
+                    const updateFn = node.scratch("popperUpdate");
                     if (popperInstance) {
-                        let popperDiv = popperInstance.state.elements.popper;
+                        const popperDiv = popperInstance.state.elements.popper;
                         if (popperDiv && popperDiv.parentNode) {
                             popperDiv.parentNode.removeChild(popperDiv);
                         }
-                        node.removeScratch('popper');
+                        node.removeScratch("popper");
                     }
                     if (updateFn) {
-                        node.off('position', updateFn);
-                        currentGraph.off('pan zoom resize', updateFn);
-                        node.removeScratch('popperUpdate');
+                        node.off("position", updateFn);
+                        currentGraph.off("pan zoom resize", updateFn);
+                        node.removeScratch("popperUpdate");
                     }
                 });
             }
-            node.on('click', function(e) {
+            node.on("click", (e) => {
                 if (e.originalEvent.ctrlKey) {
                     if (!node.selectedForDiff) {
                         node.selectedForDiff = true;
-                        node.addClass('selected-diff');
+                        node.addClass("selected-diff");
                         diffSelection.push(node);
                     } else {
                         node.selectedForDiff = false;
-                        node.removeClass('selected-diff');
-                        diffSelection = diffSelection.filter(n => n.id() !== node.id());
+                        node.removeClass("selected-diff");
+                        diffSelection = diffSelection.filter((n) => n.id() !== node.id());
                     }
                     if (diffSelection.length === 2) {
                         showDiffModal(diffSelection[0], diffSelection[1]);
-                        diffSelection.forEach(n => {
+                        diffSelection.forEach((n) => {
                             n.selectedForDiff = false;
-                            n.removeClass('selected-diff');
+                            n.removeClass("selected-diff");
                         });
                         diffSelection = [];
                     }
@@ -350,7 +345,7 @@ function renderGraph(graphData, fullRedraw = false) {
             });
         });
     } else {
-        filteredEdges.forEach(edge => {
+        filteredEdges.forEach((edge) => {
             if (!currentGraph.getElementById(edge.data.id).length) {
                 currentGraph.add(edge);
             }
@@ -360,40 +355,35 @@ function renderGraph(graphData, fullRedraw = false) {
 
 // Helper: Return the ACE editor mode based on the file extension.
 function getAceMode(fileName) {
-    const ext = fileName.split('.').pop().toLowerCase();
+    const ext = fileName.split(".").pop().toLowerCase();
     const modeMapping = {
-        'c': 'ace/mode/c_cpp',
-        'cpp': 'ace/mode/c_cpp',
-        'py': 'ace/mode/python',
-        'java': 'ace/mode/java',
-        'js': 'ace/mode/javascript',
-        'md': 'ace/mode/markdown',
-        'tex': 'ace/mode/latex',
-        'json': 'ace/mode/json',
-        'yaml': 'ace/mode/yaml',
-        'yml': 'ace/mode/yaml',
+        c: "ace/mode/c_cpp",
+        cpp: "ace/mode/c_cpp",
+        py: "ace/mode/python",
+        java: "ace/mode/java",
+        js: "ace/mode/javascript",
+        md: "ace/mode/markdown",
+        tex: "ace/mode/latex",
+        json: "ace/mode/json",
+        yaml: "ace/mode/yaml",
+        yml: "ace/mode/yaml",
     };
-    return modeMapping[ext] || 'ace/mode/text';
+    return modeMapping[ext] || "ace/mode/text";
 }
 
-/*
-  Editable Diff Modal with ACE Editor in a mode based on file extension.
-  (Ensure your modal HTML has two <div> elements with IDs "editorA" and "editorB",
-  diff setting controls with IDs "diffWrap" and "diffOutputFormat", and a container with ID "diffOutput".)
-*/
+// Show the diff modal with two ACE editors.
 function showDiffModal(nodeA, nodeB) {
     // Clear any active tooltips.
     if (currentGraph) {
-        currentGraph.nodes().forEach(node => node.trigger('mouseout'));
+        currentGraph.nodes().forEach((node) => node.trigger("mouseout"));
     }
-    const fileNameA = nodeA.data('label');
-    const fileNameB = nodeB.data('label');
-    const contentA = nodeA.data('content') || "";
-    const contentB = nodeB.data('content') || "";
+    const fileNameA = nodeA.data("label");
+    const fileNameB = nodeB.data("label");
+    const contentA = nodeA.data("content") || "";
+    const contentB = nodeB.data("content") || "";
 
-    // Initialize ACE editors in the divs.
-    let aceOptions = {
-        theme: "ace/theme/" + (isInDarkMode ? "monokai" : "chrome"),
+    const aceOptions = {
+        theme: `ace/theme/${isInDarkMode ? "monokai" : "chrome"}`,
         showGutter: true,
         fadeFoldWidgets: false,
         showFoldWidgets: true,
@@ -401,78 +391,74 @@ function showDiffModal(nodeA, nodeB) {
         showPrintMargin: false,
     };
 
-    // Determine the mode based on the file extension.
-    let modeA = getAceMode(fileNameA);
-    let editorA = ace.edit("editorA", aceOptions);
+    const modeA = getAceMode(fileNameA);
+    const editorA = ace.edit("editorA", aceOptions);
     editorA.session.setMode(modeA);
-    editorA.setValue(contentA, -1); // -1 moves cursor to start without selecting text
+    editorA.setValue(contentA, -1);
 
-    let modeB = getAceMode(fileNameB);
-    let editorB = ace.edit("editorB", aceOptions);
+    const modeB = getAceMode(fileNameB);
+    const editorB = ace.edit("editorB", aceOptions);
     editorB.session.setMode(modeB);
     editorB.setValue(contentB, -1);
 
     wrapControl.onchange = () => {
-        let wrap = wrapControl.value === "yes";
+        const wrap = wrapControl.value === "yes";
         editorA.setOption("wrap", wrap);
         editorB.setOption("wrap", wrap);
-    }
+    };
 
-    // Function to update the diff output based on the current editor values and diff controls.
     function updateEditableDiff() {
         const newContentA = editorA.getValue();
         const newContentB = editorB.getValue();
-        const outputFormat = document.getElementById("diffOutputFormat").value;
-        // Generate a unified diff string.
-        let diffString = Diff.createTwoFilesPatch(fileNameA, fileNameB, newContentA, newContentB);
+        const diffOutputFormatEl = document.getElementById("diffOutputFormat");
+        const outputFormat = diffOutputFormatEl.value;
+        const diffString = Diff.createTwoFilesPatch(fileNameA, fileNameB, newContentA, newContentB);
         const diffHtml = Diff2Html.html(diffString, {
             drawFileList: false,
             matching: "lines",
             outputFormat: outputFormat,
-            colorScheme: isInDarkMode ? "dark" : "light"
+            colorScheme: isInDarkMode ? "dark" : "light",
         });
         document.getElementById("diffOutput").innerHTML = diffHtml;
     }
 
-    // Debounce the update function.
     const debouncedUpdate = debounce(updateEditableDiff, 100);
-    // Attach change listeners to the ACE sessions.
-    editorA.session.on('change', debouncedUpdate);
-    editorB.session.on('change', debouncedUpdate);
-
-    // Also update diff when the user changes the diff setting controls.
+    editorA.session.on("change", debouncedUpdate);
+    editorB.session.on("change", debouncedUpdate);
     document.getElementById("diffOutputFormat").onchange = updateEditableDiff;
 
-    // Initial diff render.
     updateEditableDiff();
 
-    // Show the modal.
-    const diffModalEl = document.getElementById('diffModal');
+    const diffModalEl = document.getElementById("diffModal");
     const diffModal = new bootstrap.Modal(diffModalEl, {});
     modalIsOpen = true;
-    diffModalEl.addEventListener('hidden.bs.modal', () => {
-        modalIsOpen = false;
-        // Destroy ACE editors to avoid duplicates.
-        editorA.destroy();
-        editorB.destroy();
-        // Optionally clear the div contents.
-        document.getElementById("editorA").innerHTML = "";
-        document.getElementById("editorB").innerHTML = "";
-    }, { once: true });
+    diffModalEl.addEventListener(
+        "hidden.bs.modal",
+        () => {
+            modalIsOpen = false;
+            editorA.destroy();
+            editorB.destroy();
+            document.getElementById("editorA").innerHTML = "";
+            document.getElementById("editorB").innerHTML = "";
+        },
+        { once: true }
+    );
     diffModal.show();
 }
 
-document.getElementById('save-graph').addEventListener('click', () => {
+const saveGraphButton = document.getElementById("save-graph");
+saveGraphButton.addEventListener("click", () => {
     if (lastGraphData) {
-        localStorage.setItem('plagiarismGraph', JSON.stringify(lastGraphData));
+        localStorage.setItem("plagiarismGraph", JSON.stringify(lastGraphData));
         alert("Graph saved to localStorage.");
     } else {
         alert("No graph data to save.");
     }
 });
 
-document.getElementById('load-graph').addEventListener('click', () => {
-    const savedGraph = localStorage.getItem('plagiarismGraph');
+const loadGraphButton = document.getElementById("load-graph");
+loadGraphButton.addEventListener("click", () => {
+    const savedGraph = localStorage.getItem("plagiarismGraph");
     if (savedGraph) {
         lastGraphData = JSON.parse(savedGraph);
         renderGraph(lastGraphData, true);
