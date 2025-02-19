@@ -25,7 +25,6 @@
     <script src="https://unpkg.com/@sjmc11/tourguidejs/dist/tour.js" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 
     <style>
-        /* Style for the drop zone when hovered */
         #drop-zone.hover {
             background-color: #e9ecef;
             border-color: #007bff;
@@ -34,19 +33,11 @@
 </head>
 <body>
 <div class="container my-4">
-    <header id="header" class="bg-primary text-white p-4 mb-4 text-center rounded">
-        <h1>In-Browser Plagiarism Detection</h1>
-    </header>
-
-    <!-- Drag-n-Drop Zone and Controls -->
     <section id="controls" class="mb-4">
         <div id="drop-zone" class="border border-secondary rounded p-4 text-center mb-3"
              data-tg-tour="Drop a zip file with individual text files to check them pairwise for similarity.">
             Drag &amp; Drop Your ZIP File Here
         </div>
-        <!-- Progress Element (if not created dynamically) -->
-        <div id="progress" class="alert alert-info mt-3"
-             data-tg-tour="When the progress is at 100% your similarity graph is fully loaded.">Progress: 0%</div>
 
         <div class="d-flex justify-content-between align-items-center mb-3">
             <div data-tg-tour="Adjust the threshold to display the edges between the most similar files.">
@@ -54,9 +45,17 @@
                 <input type="range" id="threshold" min="0" max="1" step="0.01" value="0.5">
                 <span id="threshold-value" class="ms-2">0.50</span>
             </div>
+            <div style="width: 300px" class="mx-4">
+            <div id="progress-container" class="progress my-3" data-tg-tour="When the progress is at 100% your similarity graph is fully loaded.">
+                <div id="progress-bar" class="progress-bar" role="progressbar"
+                     aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                    0%
+                </div>
+            </div>
+            </div>
             <div data-tg-tour="Save/load file from your browser local storage.">
-                <button id="save-graph" class="btn btn-primary me-2">Save Graph</button>
-                <button id="load-graph" class="btn btn-secondary">Load Graph</button>
+                <button id="save-graph" class="btn btn-outline-secondary me-2">Save Graph</button>
+                <button id="load-graph" class="btn btn-outline-secondary">Load Graph</button>
             </div>
         </div>
     </section>

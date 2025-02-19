@@ -63,8 +63,8 @@ self.onmessage = async (e) => {
             }
             count++;
 
-            // Send batch updates every 10 valid pairs or when completed.
-            if (batchEdges.length >= 10 || count === totalPairs) {
+            // Send batch updates every 20 valid pairs or when completed.
+            if (batchEdges.length >= 20 || count === totalPairs) {
                 self.postMessage({
                     type: "batch",
                     batchEdges,

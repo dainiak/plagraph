@@ -25,15 +25,15 @@ let threshold = parseFloat(thresholdSlider.value);
 let lastGraphData = null;
 let diffSelection = [];
 
-// Create (or reuse) a progress div.
-const progressDiv = document.getElementById("progress") || (() => {
-    const div = document.createElement("div");
-    div.id = "progress";
-    div.className = "alert alert-info mt-3";
-    document.body.insertBefore(div, graphContainer);
-    return div;
-})();
-progressDiv.innerText = "Progress: 0%";
+// Use the Bootstrap progress bar element.
+const progressBar = document.getElementById("progress-bar");
+updateProgress(0);
+
+function updateProgress(progress) {
+    progressBar.style.width = progress + '%';
+    progressBar.setAttribute('aria-valuenow', progress);
+    progressBar.innerText = progress + '%';
+}
 
 // Debounce utility: calls func after delay ms of inactivity.
 function debounce(func, delay) {
@@ -157,7 +157,7 @@ function compressText(text) {
 
 // Process the ZIP file and render the graph.
 async function handleZipFile(zipFile) {
-    progressDiv.innerText = "Progress: 0%";
+    updateProgress(0);
     try {
         const fileData = await convertZipToFileObjects(zipFile);
         if (fileData.length === 0) {
@@ -213,9 +213,9 @@ async function handleZipFile(zipFile) {
                         }
                     });
                 }
-                progressDiv.innerText = `Progress: ${msg.progress.toFixed(1)}%`;
+                updateProgress(msg.progress.toFixed(1));
             } else if (msg.type === "complete") {
-                progressDiv.innerText = "Progress: 100% (Completed)";
+                updateProgress(100);
                 worker.terminate();
             }
         };
@@ -248,7 +248,7 @@ function renderGraph(graphData, fullRedraw = false) {
                     selector: "node",
                     style: {
                         label: "data(label)",
-                        "background-color": "#0074D9",
+                        "background-color": "rgb(13, 110, 253)",
                         "text-valign": "center",
                         color: isInDarkMode ? "#eee" : "#555",
                         "font-size": "10px",
@@ -324,8 +324,7 @@ function renderGraph(graphData, fullRedraw = false) {
                 });
             }
             node.on("click", (e) => {
-                if (!e.originalEvent.ctrlKey && !e.originalEvent.shiftKey)
-                    return;
+                if (!e.originalEvent.ctrlKey && !e.originalEvent.shiftKey) return;
                 if (!node.selectedForDiff) {
                     node.selectedForDiff = true;
                     node.addClass("selected-diff");
@@ -467,6 +466,17 @@ loadGraphButton.addEventListener("click", () => {
     }
 });
 
+function showTour() {
+    const tg = new tourguide.TourGuideClient();
+    tg.start();
+    setTimeout(() => {
+        document.querySelectorAll(".tg-dialog-btn").forEach((el) => {
+            el.classList.remove("tg-dialog-btn");
+            el.classList.add("btn");
+            el.classList.add("btn-sm");
+            el.classList.add("btn-outline-secondary");
+        });
+    }, 50);
+}
 
-const tg = new tourguide.TourGuideClient();
-tg.start();
+showTour()
