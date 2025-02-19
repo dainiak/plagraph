@@ -51,16 +51,12 @@ self.onmessage = async (e) => {
 
     for (let i = 0; i < n; i++) {
         for (let j = i + 1; j < n; j++) {
-            // Only compare files with the same comparison key.
-            if (fileData[i].comparison_key !== fileData[j].comparison_key) {
+            if (fileData[i].comparison_key !== fileData[j].comparison_key)
                 continue;
-            }
+
             try {
-                const edge = await computeEdge(fileData, i, j);
-                batchEdges.push(edge);
-            } catch (error) {
-                // Skip this pair on error.
-            }
+                batchEdges.push(await computeEdge(fileData, i, j));
+            } catch (error) {}
             count++;
 
             // Send batch updates every 20 valid pairs or when completed.
@@ -73,6 +69,13 @@ self.onmessage = async (e) => {
                 batchEdges = [];
             }
         }
+    }
+    if (batchEdges.length) {
+        self.postMessage({
+            type: "batch",
+            batchEdges,
+            progress: (count / totalPairs) * 100,
+        });
     }
     self.postMessage({ type: "complete" });
 };
