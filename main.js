@@ -3,36 +3,38 @@ if (document.body) {
     document.body.setAttribute("data-bs-theme", isInDarkMode ? "dark" : "light");
 }
 
-const wrapControl = document.getElementById("diffWrap");
-const diffOutputFormatEl = document.getElementById("diffOutputFormat");
-const graphContainer = document.getElementById("graph-container");
-const thresholdSlider = document.getElementById("threshold");
-const thresholdValueDisplay = document.getElementById("threshold-value");
+const wrapControlElement = document.getElementById("diffWrap");
+const diffOutputFormatElement = document.getElementById("diffOutputFormat");
+const graphContainerElement = document.getElementById("graph-container");
+const thresholdSliderElement = document.getElementById("threshold");
+const thresholdValueDisplayElement = document.getElementById("threshold-value");
+const progressBarElement = document.getElementById("progress-bar");
+const saveGraphButton = document.getElementById("save-graph");
+const loadGraphButton = document.getElementById("load-graph");
 
-// Register cytoscape-popper with popper@2 if available.
-if (typeof Popper !== "undefined" && typeof cytoscapePopper !== "undefined") {
-    cytoscape.use(cytoscapePopper(Popper.createPopper));
-}
-if (typeof cytoscape === "undefined") {
-    cytoscape.use(cytoscapeCola);
-}
 
-// Global flags and variables.
+const layoutSettings = {
+    name: "cola",
+    fit: true,
+    padding: 30,
+    animate: true
+};
+
+// Global variables.
 let modalIsOpen = false;
 let maxSimilarity = 0;
 let currentGraph = null;
-let threshold = parseFloat(thresholdSlider.value);
+let threshold = parseFloat(thresholdSliderElement.value);
 let lastGraphData = null;
 let diffSelection = [];
 
-// Use the Bootstrap progress bar element.
-const progressBar = document.getElementById("progress-bar");
-updateProgress(0);
+let allFileData = [];
+
 
 function updateProgress(progress) {
-    progressBar.style.width = progress + '%';
-    progressBar.setAttribute('aria-valuenow', progress);
-    progressBar.innerText = progress + '%';
+    progressBarElement.style.width = progress + '%';
+    progressBarElement.setAttribute('aria-valuenow', progress);
+    progressBarElement.innerText = progress + '%';
 }
 
 // Debounce utility: calls func after delay ms of inactivity.
@@ -88,12 +90,13 @@ async function convertZipToFileObjects(zipFile) {
     return results;
 }
 
-thresholdSlider.addEventListener("input", (e) => {
+// Listen for threshold slider events.
+thresholdSliderElement.addEventListener("input", (e) => {
     threshold = parseFloat(e.target.value);
-    thresholdValueDisplay.innerText = `${threshold.toFixed(2)} / ${maxSimilarity.toFixed(2)}`;
+    thresholdValueDisplayElement.innerText = `${threshold.toFixed(2)} / ${maxSimilarity.toFixed(2)}`;
     debouncedUpdateGraphEdges();
 });
-thresholdSlider.addEventListener("change", () => {
+thresholdSliderElement.addEventListener("change", () => {
     debouncedUpdateGraphEdges.cancel();
     if (lastGraphData && currentGraph) updateGraphEdges();
 });
@@ -119,12 +122,7 @@ function updateGraphEdges() {
             currentGraph.add({ data: edgeData });
         }
     });
-    const layout = currentGraph.layout({
-        name: "cola",
-        fit: true,
-        padding: 30,
-    });
-    layout.run();
+    currentGraph.layout(layoutSettings).run();
 }
 
 const debouncedUpdateGraphEdges = debounce(() => {
@@ -140,10 +138,24 @@ dropZone.addEventListener("dragover", (e) => {
 dropZone.addEventListener("dragleave", () => {
     dropZone.classList.remove("hover");
 });
+
+// NEW: Modified drop event handler.
+// It separates ZIP files from individual files.
 dropZone.addEventListener("drop", async (e) => {
     e.preventDefault();
     dropZone.classList.remove("hover");
-    if (e.dataTransfer.files.length > 0) await handleZipFile(e.dataTransfer.files[0]);
+    const files = Array.from(e.dataTransfer.files);
+    const zipFiles = files.filter(file => file.name.toLowerCase().endsWith(".zip"));
+    const nonZipFiles = files.filter(file => !file.name.toLowerCase().endsWith(".zip"));
+
+    // Process ZIP files.
+    for (const zipFile of zipFiles) {
+        await handleZipFile(zipFile);
+    }
+    // Process individual files.
+    if (nonZipFiles.length > 0) {
+        await handleIndividualFiles(nonZipFiles);
+    }
 });
 
 // Compress text using LZMA.
@@ -156,16 +168,18 @@ function compressText(text) {
     });
 }
 
-// Process the ZIP file and render the graph.
+// Process the ZIP file and render/augment the graph.
 async function handleZipFile(zipFile) {
     updateProgress(0);
     try {
-        const fileData = await convertZipToFileObjects(zipFile);
-        if (fileData.length === 0) {
+        const newFileData = await convertZipToFileObjects(zipFile);
+        if (newFileData.length === 0) {
             alert("No files with an extension found in the ZIP archive.");
             return;
         }
-        const nodes = fileData.map((file) => ({
+        const startIndex = allFileData.length;
+        allFileData = allFileData.concat(newFileData);
+        const newNodes = newFileData.map(file => ({
             data: {
                 id: file.id,
                 filePath: file.filePath,
@@ -173,59 +187,136 @@ async function handleZipFile(zipFile) {
                 label: file.fileName,
                 tooltip: file.tooltip,
                 content: file.content,
-            },
-        }));
-        lastGraphData = { nodes, allEdges: [] };
-        renderGraph(lastGraphData, true);
-        const worker = new Worker("ncdWorker.js");
-        worker.postMessage({ fileData });
-        worker.onmessage = (e) => {
-            const msg = e.data;
-            if (msg.type === "batch") {
-                // Append batch edges.
-                lastGraphData.allEdges = lastGraphData.allEdges.concat(msg.batchEdges);
-                // Update maxSimilarity based on newly received edges.
-                msg.batchEdges.forEach((edge) => {
-                    if (edge.similarity > maxSimilarity) {
-                        maxSimilarity = edge.similarity;
-                    }
-                });
-                // Update the slider's max and step.
-                thresholdSlider.max = maxSimilarity;
-                thresholdSlider.step = (maxSimilarity / 100).toFixed(3);
-                if (threshold > maxSimilarity) {
-                    threshold = maxSimilarity;
-                    thresholdSlider.value = threshold;
-                }
-                thresholdValueDisplay.innerText = `${threshold.toFixed(2)} / ${maxSimilarity.toFixed(2)}`;
-                // Add new edges that meet current threshold.
-                if (currentGraph) {
-                    msg.batchEdges.forEach((edge) => {
-                        if (
-                            edge.similarity >= threshold &&
-                            !currentGraph.getElementById(`${edge.source}_${edge.target}`).length
-                        ) {
-                            currentGraph.add({
-                                data: {
-                                    id: `${edge.source}_${edge.target}`,
-                                    source: edge.source,
-                                    target: edge.target,
-                                    weight: edge.similarity.toFixed(2),
-                                },
-                            });
-                        }
-                    });
-                }
-                updateProgress(msg.progress.toFixed(1));
-            } else if (msg.type === "complete") {
-                updateProgress(100);
-                worker.terminate();
             }
-        };
+        }));
+        if (!lastGraphData) {
+            lastGraphData = { nodes: newNodes, allEdges: [] };
+            renderGraph(lastGraphData, true);
+        } else {
+            lastGraphData.nodes = lastGraphData.nodes.concat(newNodes);
+            currentGraph.add(newNodes);
+            currentGraph.layout(layoutSettings).run();
+        }
+        computeEdgesForNewFiles(startIndex);
     } catch (err) {
         console.error("Error processing ZIP file:", err);
         alert("Error processing ZIP file.");
     }
+}
+
+// Process individual (non-ZIP) files.
+async function handleIndividualFiles(files) {
+    const newFileData = [];
+    for (const file of files) {
+        try {
+            const fileObj = await handleIndividualFile(file);
+            newFileData.push(fileObj);
+        } catch (error) {
+            console.error("Error processing file:", file.name, error);
+        }
+    }
+    if (newFileData.length === 0) {
+        alert("No valid files were dropped.");
+        return;
+    }
+    const startIndex = allFileData.length;
+    allFileData = allFileData.concat(newFileData);
+    const newNodes = newFileData.map(file => ({
+        data: {
+            id: file.id,
+            filePath: file.filePath,
+            fileName: file.fileName,
+            label: file.fileName,
+            tooltip: file.tooltip,
+            content: file.content,
+        }
+    }));
+    if (!lastGraphData) {
+        lastGraphData = { nodes: newNodes, allEdges: [] };
+        renderGraph(lastGraphData, true);
+    } else {
+        lastGraphData.nodes = lastGraphData.nodes.concat(newNodes);
+        currentGraph.add(newNodes);
+        currentGraph.layout(layoutSettings).run();
+    }
+    computeEdgesForNewFiles(startIndex);
+}
+
+// Process a single individual file.
+function handleIndividualFile(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            const content = e.target.result;
+            try {
+                const compSize = await compressText(content);
+                const parts = file.name.split(".");
+                const fileName = file.name;
+                let comparison_key = "";
+                if (parts.length > 1) {
+                    comparison_key = parts.pop().toLowerCase();
+                }
+                resolve({
+                    id: file.name, // ensure uniqueness if necessary
+                    fileName: fileName,
+                    filePath: file.name,
+                    content: content,
+                    compSize: compSize,
+                    comparison_key: comparison_key,
+                    tooltip: file.name,
+                });
+            } catch (error) {
+                reject(error);
+            }
+        };
+        reader.onerror = (err) => reject(err);
+        reader.readAsText(file);
+    });
+}
+
+// Compute edges for new files added starting from startIndex.
+// Only pairs where at least one file is new will be computed.
+function computeEdgesForNewFiles(startIndex) {
+    const worker = new Worker("ncdWorker.js");
+    worker.postMessage({ fileData: allFileData, startIndex: startIndex });
+    worker.onmessage = (e) => {
+        const msg = e.data;
+        if (msg.type === "batch") {
+            lastGraphData.allEdges = lastGraphData.allEdges.concat(msg.batchEdges);
+            // Update maxSimilarity based on the new edges.
+            msg.batchEdges.forEach((edge) => {
+                if (edge.similarity > maxSimilarity) {
+                    maxSimilarity = edge.similarity;
+                }
+            });
+            thresholdSliderElement.max = maxSimilarity;
+            thresholdSliderElement.step = (maxSimilarity / 100).toFixed(3);
+            if (threshold > maxSimilarity) {
+                threshold = maxSimilarity;
+                thresholdSliderElement.value = threshold;
+            }
+            thresholdValueDisplayElement.innerText = `${threshold.toFixed(2)} / ${maxSimilarity.toFixed(2)}`;
+            // Add new edges that meet the current threshold.
+            if (currentGraph) {
+                msg.batchEdges.forEach((edge) => {
+                    if (edge.similarity >= threshold && !currentGraph.getElementById(`${edge.source}_${edge.target}`).length) {
+                        currentGraph.add({
+                            data: {
+                                id: `${edge.source}_${edge.target}`,
+                                source: edge.source,
+                                target: edge.target,
+                                weight: edge.similarity.toFixed(2),
+                            },
+                        });
+                    }
+                });
+            }
+            updateProgress(msg.progress.toFixed(1));
+        } else if (msg.type === "complete") {
+            updateProgress(100);
+            worker.terminate();
+        }
+    };
 }
 
 // Render the cytoscape graph.
@@ -244,7 +335,7 @@ function renderGraph(graphData, fullRedraw = false) {
         const elements = [...graphData.nodes, ...filteredEdges];
         if (currentGraph) currentGraph.destroy();
         currentGraph = cytoscape({
-            container: graphContainer,
+            container: graphContainerElement,
             elements: elements,
             style: [
                 {
@@ -279,11 +370,7 @@ function renderGraph(graphData, fullRedraw = false) {
                     },
                 },
             ],
-            layout: {
-                name: "cola",
-                padding: 30,
-                fit: true,
-            },
+            layout: layoutSettings,
         });
 
         // Helper to create a popover div.
@@ -376,7 +463,6 @@ function getAceMode(fileName) {
 
 // Show the diff modal with two ACE editors.
 function showDiffModal(nodeA, nodeB) {
-    // Clear any active tooltips.
     if (currentGraph) {
         currentGraph.nodes().forEach((node) => node.trigger("mouseout"));
     }
@@ -386,36 +472,31 @@ function showDiffModal(nodeA, nodeB) {
     document.getElementById("editorBlabel").textContent = nodeB.data("filePath");
     const contentA = nodeA.data("content") || "";
     const contentB = nodeB.data("content") || "";
-
     const aceOptions = {
         theme: `ace/theme/${isInDarkMode ? "monokai" : "chrome"}`,
         showGutter: true,
         fadeFoldWidgets: false,
         showFoldWidgets: true,
-        wrap: wrapControl.value === "yes",
+        wrap: wrapControlElement.value === "yes",
         showPrintMargin: false,
     };
-
     const modeA = getAceMode(fileNameA);
     const editorA = ace.edit("editorA", aceOptions);
     editorA.session.setMode(modeA);
     editorA.setValue(contentA, -1);
-
     const modeB = getAceMode(fileNameB);
     const editorB = ace.edit("editorB", aceOptions);
     editorB.session.setMode(modeB);
     editorB.setValue(contentB, -1);
-
-    wrapControl.onchange = () => {
-        const wrap = wrapControl.value === "yes";
+    wrapControlElement.onchange = () => {
+        const wrap = wrapControlElement.value === "yes";
         editorA.setOption("wrap", wrap);
         editorB.setOption("wrap", wrap);
     };
-
     function updateEditableDiff() {
         const newContentA = editorA.getValue();
         const newContentB = editorB.getValue();
-        const outputFormat = diffOutputFormatEl.value;
+        const outputFormat = diffOutputFormatElement.value;
         const diffString = Diff.createTwoFilesPatch(fileNameA, fileNameB, newContentA, newContentB);
         document.getElementById("diffOutput").innerHTML = Diff2Html.html(diffString, {
             drawFileList: false,
@@ -424,14 +505,11 @@ function showDiffModal(nodeA, nodeB) {
             colorScheme: isInDarkMode ? "dark" : "light",
         });
     }
-
     const debouncedUpdate = debounce(updateEditableDiff, 100);
     editorA.session.on("change", debouncedUpdate);
     editorB.session.on("change", debouncedUpdate);
     document.getElementById("diffOutputFormat").onchange = updateEditableDiff;
-
     updateEditableDiff();
-
     const diffModalEl = document.getElementById("diffModal");
     const diffModal = new bootstrap.Modal(diffModalEl, {});
     modalIsOpen = true;
@@ -449,7 +527,6 @@ function showDiffModal(nodeA, nodeB) {
     diffModal.show();
 }
 
-const saveGraphButton = document.getElementById("save-graph");
 saveGraphButton.addEventListener("click", () => {
     if (lastGraphData) {
         localStorage.setItem("plagiarismGraph", JSON.stringify(lastGraphData));
@@ -459,7 +536,7 @@ saveGraphButton.addEventListener("click", () => {
     }
 });
 
-const loadGraphButton = document.getElementById("load-graph");
+
 loadGraphButton.addEventListener("click", () => {
     const savedGraph = localStorage.getItem("plagiarismGraph");
     if (savedGraph) {
@@ -478,13 +555,12 @@ function showTour() {
     setTimeout(() => {
         document.querySelectorAll(".tg-dialog-btn").forEach((el) => {
             el.classList.remove("tg-dialog-btn");
-            el.classList.add("btn");
-            el.classList.add("btn-sm");
-            el.classList.add("btn-outline-secondary");
+            el.classList.add("btn", "btn-sm", "btn-outline-secondary");
         });
     }, 50);
 }
 
+updateProgress(0);
 document.getElementById("showTour").addEventListener("click", showTour);
 
-showTour()
+showTour();

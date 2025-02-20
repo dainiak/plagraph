@@ -23,43 +23,34 @@ const computeEdge = async (fileData, i, j) => {
     const maxSize = Math.max(fileA.compSize, fileB.compSize);
     const ncd = (compConcatSize - minSize) / maxSize;
     const similarity = 1 - ncd;
-    // Use each file's "path" as the unique identifier.
     return { source: fileA.id, target: fileB.id, similarity };
-};
-
-// Compute total pairs among files grouped by their comparison key.
-const computeTotalPairs = (fileData) => {
-    const groupCounts = {};
-    fileData.forEach((file) => {
-        const key = file.comparison_key;
-        groupCounts[key] = (groupCounts[key] || 0) + 1;
-    });
-    return Object.keys(groupCounts).reduce(
-        (total, key) => total + (groupCounts[key] * (groupCounts[key] - 1)) / 2,
-        0
-    );
 };
 
 // Listen for messages from the main thread.
 self.onmessage = async (e) => {
     const fileData = e.data.fileData;
+    // startIndex indicates that files [0, startIndex-1] have been processed already.
+    const startIndex = e.data.startIndex || 0;
     const n = fileData.length;
-    const totalPairs = computeTotalPairs(fileData);
-
+    const n_new = n - startIndex;
+    // Total pairs to process: (old vs. new) plus (new vs. new)
+    const totalPairs = (startIndex * n_new) + ((n_new * (n_new - 1)) / 2);
     let count = 0;
     let batchEdges = [];
 
     for (let i = 0; i < n; i++) {
         for (let j = i + 1; j < n; j++) {
-            if (fileData[i].comparison_key !== fileData[j].comparison_key)
-                continue;
+            // Skip pairs where both files are from the old set.
+            if (i < startIndex && j < startIndex) continue;
+            if (fileData[i].comparison_key !== fileData[j].comparison_key) continue;
 
             try {
                 batchEdges.push(await computeEdge(fileData, i, j));
-            } catch (error) {}
+            } catch (error) {
+                // Ignore errors on a per-edge basis.
+            }
             count++;
 
-            // Send batch updates every 20 valid pairs or when completed.
             if (batchEdges.length >= 20 || count === totalPairs) {
                 self.postMessage({
                     type: "batch",
