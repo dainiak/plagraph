@@ -76,12 +76,13 @@ async function convertZipToFileObjects(zipFile) {
             comparison_key = fileName.split(".").pop().toLowerCase();
         }
         results.push({
+            id: entry.name,
             fileName: fileName,
-            path: entry.name,
+            filePath: entry.name,
             content: content,
             compSize: compSize,
             comparison_key: comparison_key,
-            tooltip: fileName,
+            tooltip: entry.name,
         });
     }
     return results;
@@ -166,7 +167,9 @@ async function handleZipFile(zipFile) {
         }
         const nodes = fileData.map((file) => ({
             data: {
-                id: file.path,
+                id: file.id,
+                filePath: file.filePath,
+                fileName: file.fileName,
                 label: file.fileName,
                 tooltip: file.tooltip,
                 content: file.content,
@@ -379,6 +382,8 @@ function showDiffModal(nodeA, nodeB) {
     }
     const fileNameA = nodeA.data("label");
     const fileNameB = nodeB.data("label");
+    document.getElementById("editorAlabel").textContent = nodeA.data("filePath");
+    document.getElementById("editorBlabel").textContent = nodeB.data("filePath");
     const contentA = nodeA.data("content") || "";
     const contentB = nodeB.data("content") || "";
 
@@ -466,8 +471,9 @@ loadGraphButton.addEventListener("click", () => {
     }
 });
 
+const tg = new tourguide.TourGuideClient();
+
 function showTour() {
-    const tg = new tourguide.TourGuideClient();
     tg.start();
     setTimeout(() => {
         document.querySelectorAll(".tg-dialog-btn").forEach((el) => {
@@ -478,5 +484,7 @@ function showTour() {
         });
     }, 50);
 }
+
+document.getElementById("showTour").addEventListener("click", showTour);
 
 showTour()

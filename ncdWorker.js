@@ -24,7 +24,7 @@ const computeEdge = async (fileData, i, j) => {
     const ncd = (compConcatSize - minSize) / maxSize;
     const similarity = 1 - ncd;
     // Use each file's "path" as the unique identifier.
-    return { source: fileA.path, target: fileB.path, similarity };
+    return { source: fileA.id, target: fileB.id, similarity };
 };
 
 // Compute total pairs among files grouped by their comparison key.

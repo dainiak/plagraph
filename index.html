@@ -87,11 +87,11 @@
                 <!-- Editable Areas -->
                 <div class="row">
                     <div class="col-md-6">
-                        <label for="editorA" class="form-label">File A</label>
+                        <label for="editorA" class="form-label" id="editorAlabel">File A</label>
                         <div id="editorA" style="height:300px; border:1px solid #ccc;"></div>
                     </div>
                     <div class="col-md-6">
-                        <label for="editorB" class="form-label">File B</label>
+                        <label for="editorB" class="form-label" id="editorBlabel">File B</label>
                         <div id="editorB" style="height:300px; border:1px solid #ccc;"></div>
                     </div>
                 </div>
@@ -107,6 +107,8 @@
     </div>
 </div>
 
+<button id="showTour" style="position: fixed; bottom: 20px; right: 20px; z-index: 100;" class="btn btn-outline-secondary btn-sm"
+        data-tg-tour="Press this button to show the tour again.">?</button>
 
 <script src="main.js"></script>
 </body>
