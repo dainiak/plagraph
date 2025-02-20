@@ -26,8 +26,6 @@ A web application for detecting similarities between text files by computing the
   A built-in tour guides new users through the app’s main features.
 
 ## Demo
-
-If you have a live demo, include a link here. For example:  
 [Live Demo](https://dainiak.github.io/plagraph/)
 
 
